@@ -716,9 +716,16 @@
     }
 
     function mod12(hour){ return ((hour % 12) + 12) % 12; }
+    function mod24(hour){ return ((hour % 24) + 24) % 24; }
     function displayHour(hour){ const h = mod12(hour); return h === 0 ? 12 : h; }
-    function formatTime(time){ return displayHour(time.h) + ":" + String(time.m).padStart(2,"0"); }
+    function formatTime12(time){ return displayHour(time.h) + ":" + String(time.m).padStart(2,"0"); }
+    function formatTime24(time){ return mod24(time.h) + ":" + String(time.m).padStart(2,"0"); }
+    function formatTime(time, forcedFormat){
+      const use24 = forcedFormat ? forcedFormat === "24" : !!time.use24;
+      return use24 ? formatTime24(time) : formatTime12(time);
+    }
     function keyTime(time){ return mod12(time.h) + ":" + time.m; }
+    function keyActualTime(time){ return mod24(time.h) + ":" + time.m + ":" + (time.use24 ? "24" : "12"); }
     function sameTime(a,b){ return mod12(a.h) === mod12(b.h) && a.m === b.m; }
 
     function getMinuteStepForLevel(level) {
@@ -752,24 +759,35 @@
       return copy;
     }
 
-    function randomTimeForLevel(level) {
-      const h = Math.floor(Math.random() * 12);
-      if (level === "easy") return {h, m:0, answers:[]};
-      if (level === "medium") return {h, m:Math.floor(Math.random() * 12) * 5, answers:[]};
-      return {h, m:Math.floor(Math.random() * 60), answers:[]};
+    function randomTimeForLevel(level, use24 = Math.random() < 0.5) {
+      const h = use24 ? Math.floor(Math.random() * 24) : Math.floor(Math.random() * 12);
+      if (level === "easy") return {h, m:0, use24, answers:[]};
+      if (level === "medium") return {h, m:Math.floor(Math.random() * 12) * 5, use24, answers:[]};
+      return {h, m:Math.floor(Math.random() * 60), use24, answers:[]};
     }
 
     function buildTasks(level) {
       if (level === "easy") {
-        return shuffle([0,1,2,3,4,5,6,7,8,9,10,11]).slice(0, 8).map(h => ({h, m:0, answers:[]}));
+        const easyTimes = [
+          {h:1, use24:false}, {h:14, use24:true}, {h:3, use24:false}, {h:16, use24:true},
+          {h:5, use24:false}, {h:20, use24:true}, {h:7, use24:false}, {h:22, use24:true},
+          {h:9, use24:false}, {h:0, use24:true}, {h:11, use24:false}, {h:18, use24:true}
+        ];
+        return shuffle(easyTimes).slice(0, 8).map(t => ({h:t.h, m:0, use24:t.use24, answers:[]}));
       }
       if (level === "medium") {
-        return mediumTasks.map(t => ({h:t.h, m:t.m, answers:t.answers.slice()}));
+        return mediumTasks.map((t, i) => {
+          const use24 = i % 2 === 1;
+          const hour = use24 ? mod12(t.h) + 12 : t.h;
+          return {h:hour, m:t.m, use24, answers:use24 ? [] : t.answers.slice()};
+        });
       }
       const list = [];
       const used = new Set();
+      const formats = shuffle([false,false,false,false,true,true,true,true]);
       while (list.length < 8) {
-        const t = randomTimeForLevel("hard");
+        const use24 = formats[list.length];
+        const t = randomTimeForLevel("hard", use24);
         if (used.has(keyTime(t))) continue;
         used.add(keyTime(t));
         list.push(t);
@@ -802,7 +820,7 @@
       }
 
       for (const item of candidates) {
-        const t = {h:mod12(item.h), m:snapMinute(item.m, level), answers:[]};
+        const t = {h:mod24(item.h), m:snapMinute(item.m, level), use24:task.use24, answers:[]};
         if (used.has(keyTime(t))) continue;
         used.add(keyTime(t));
         result.push(t);
@@ -810,7 +828,7 @@
       }
 
       while (result.length < count) {
-        const t = randomTimeForLevel(level);
+        const t = randomTimeForLevel(level, task.use24);
         if (used.has(keyTime(t))) continue;
         used.add(keyTime(t));
         result.push(t);
@@ -819,9 +837,39 @@
     }
 
     function makeChoiceTimes(task, level, count) {
-      const options = [{h:task.h, m:task.m, correct:true}];
-      makeDistractors(task, level, count - 1).forEach(t => options.push({h:t.h, m:t.m, correct:false}));
+      const options = [{h:task.h, m:task.m, use24:task.use24, correct:true}];
+      makeDistractors(task, level, count - 1).forEach(t => options.push({h:t.h, m:t.m, use24:task.use24, correct:false}));
       return shuffle(options);
+    }
+
+    function makeAnswerChoiceTimes(task, level, count) {
+      const options = [];
+      const usedLabels = new Set();
+      const usedClockTimes = new Set();
+      function addOption(time, correct = false, use24 = !!time.use24) {
+        const option = {h:mod24(time.h), m:time.m, use24, correct};
+        const label = formatTime(option);
+        const clockKey = keyTime(option);
+        if (usedLabels.has(label)) return false;
+        if (!correct && usedClockTimes.has(clockKey)) return false;
+        usedLabels.add(label);
+        usedClockTimes.add(clockKey);
+        options.push(option);
+        return true;
+      }
+
+      addOption(task, true, !!task.use24);
+
+      makeDistractors(task, level, 12).forEach((time, index) => {
+        const use24 = index % 2 === 0 ? !!task.use24 : !task.use24;
+        addOption(time, false, use24);
+      });
+
+      while (options.length < count) {
+        const t = randomTimeForLevel(level, Math.random() < 0.5);
+        addOption(t, false, !!t.use24);
+      }
+      return shuffle(options).slice(0, count);
     }
 
     function clockSvgMarkup(time) {
@@ -1050,15 +1098,17 @@
       const shortHour = cleaned.match(/^(\d{1,2})$/);
       if (shortHour && task.m === 0) {
         const h = Number(shortHour[1]);
-        return h >= 0 && h <= 23 && h % 12 === mod12(task.h);
+        if (!Number.isInteger(h) || h < 0 || h > 23) return false;
+        return mod12(h) === mod12(task.h);
       }
       const match = cleaned.match(/^(\d{1,2}):(\d{1,2})$/);
       if (!match) return false;
       const userHour = Number(match[1]);
       const userMinute = Number(match[2]);
       if (!Number.isInteger(userHour) || !Number.isInteger(userMinute)) return false;
-      if (userHour < 0 || userHour > 23 || userMinute < 0 || userMinute > 59) return false;
-      return userHour % 12 === mod12(task.h) && userMinute === task.m;
+      if (userHour < 0 || userHour > 23) return false;
+      if (userMinute < 0 || userMinute > 59) return false;
+      return mod12(userHour) === mod12(task.h) && userMinute === task.m;
     }
 
     function clearAnswerState() {
@@ -1079,7 +1129,7 @@
 
     function renderAnswerOptions(task) {
       answerOptions.innerHTML = "";
-      makeChoiceTimes(task, currentLevel, 4).forEach(option => {
+      makeAnswerChoiceTimes(task, currentLevel, 4).forEach(option => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "choice-card";
@@ -1115,12 +1165,13 @@
       quizClockArea.classList.toggle("easy-drag", currentLevel === "easy");
 
       if (quizMode === "read") {
-        levelBadge.textContent = levelNames[currentLevel] + ": который час?";
+        levelBadge.textContent = levelNames[currentLevel] + ": введи время";
+        answerInput.placeholder = "Введите ответ";
         setQuizClock(task.h, task.m);
         setTimeout(() => answerInput.focus(), 50);
       }
       if (quizMode === "set") {
-        levelBadge.textContent = levelNames[currentLevel] + ": " + formatTime(task);
+        levelBadge.textContent = levelNames[currentLevel] + ": поставь " + formatTime(task);
         setHelp.textContent = currentLevel === "easy" ? "Крути любую стрелку или нажимай на циферблат." : "Перетащи стрелки и нажми «Проверить».";
         setUserClock(0, 0, false);
       }
