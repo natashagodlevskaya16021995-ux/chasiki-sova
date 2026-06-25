@@ -437,6 +437,15 @@
       align-items:center;
     }
 
+    .quiz-top-left{
+      position:absolute;
+      top:20px;
+      left:24px;
+      display:flex;
+      gap:16px;
+      z-index:6;
+    }
+
     .quiz-top-right{
       position:absolute;
       top:20px;
@@ -709,6 +718,13 @@
         width:min(56vw, 320px);
         height:min(56vw, 320px);
       }
+      .quiz-top-left{
+        position:static;
+        width:100%;
+        justify-content:center;
+        margin-bottom:8px;
+        flex-wrap:wrap;
+      }
       .quiz-top-right{
         position:static;
         width:100%;
@@ -802,8 +818,11 @@
 
     <section class="screen" id="screen-quiz">
       <div class="quiz-screen">
-        <div class="quiz-top-right">
+        <div class="quiz-top-left">
           <div class="progress top-same" id="progressBox">1 / 8</div>
+        </div>
+
+        <div class="quiz-top-right">
           <button class="pvz-btn small-btn top-same" id="backTrainerBtn">Тренировка</button>
           <button class="pvz-btn small-btn top-same" id="chooseLevelBtn">Уровни</button>
         </div>
