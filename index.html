@@ -843,33 +843,34 @@
     }
 
     function makeAnswerChoiceTimes(task, level, count) {
-      const options = [];
-      const usedLabels = new Set();
-      const usedClockTimes = new Set();
-      function addOption(time, correct = false, use24 = !!time.use24) {
-        const option = {h:mod24(time.h), m:time.m, use24, correct};
+      const correctOption = {h:mod24(task.h), m:task.m, use24:!!task.use24, correct:true};
+      const distractors = [];
+      const usedLabels = new Set([formatTime(correctOption)]);
+      const usedClockTimes = new Set([keyTime(correctOption)]);
+
+      function addDistractor(time, use24 = !!time.use24) {
+        const option = {h:mod24(time.h), m:time.m, use24, correct:false};
         const label = formatTime(option);
         const clockKey = keyTime(option);
         if (usedLabels.has(label)) return false;
-        if (!correct && usedClockTimes.has(clockKey)) return false;
+        if (usedClockTimes.has(clockKey)) return false;
         usedLabels.add(label);
         usedClockTimes.add(clockKey);
-        options.push(option);
+        distractors.push(option);
         return true;
       }
 
-      addOption(task, true, !!task.use24);
-
       makeDistractors(task, level, 12).forEach((time, index) => {
         const use24 = index % 2 === 0 ? !!task.use24 : !task.use24;
-        addOption(time, false, use24);
+        addDistractor(time, use24);
       });
 
-      while (options.length < count) {
+      while (distractors.length < count - 1) {
         const t = randomTimeForLevel(level, Math.random() < 0.5);
-        addOption(t, false, !!t.use24);
+        addDistractor(t, !!t.use24);
       }
-      return shuffle(options).slice(0, count);
+
+      return shuffle([correctOption, ...shuffle(distractors).slice(0, count - 1)]);
     }
 
     function clockSvgMarkup(time) {
