@@ -776,7 +776,7 @@
         return shuffle(easyTimes).slice(0, 8).map(t => ({h:t.h, m:0, use24:t.use24, answers:[]}));
       }
       if (level === "medium") {
-        return mediumTasks.map((t, i) => {
+        return shuffle(mediumTasks).map((t, i) => {
           const use24 = i % 2 === 1;
           const hour = use24 ? mod12(t.h) + 12 : t.h;
           return {h:hour, m:t.m, use24, answers:use24 ? [] : t.answers.slice()};
@@ -1014,7 +1014,7 @@
     const minuteHand = document.getElementById("minuteHand");
     const modeBadge = document.getElementById("modeBadge");
     const clockArea = document.getElementById("clockArea");
-    let currentHour = 8;
+    let currentHour = 0;
     let currentMinute = 0;
     let freeMode = false;
     let draggingHand = null;
@@ -1047,7 +1047,7 @@
       freeMode = true;
       updateTrainerBadge();
     });
-    document.getElementById("resetBtn").addEventListener("click", () => setClockTime(8, 0, true));
+    document.getElementById("resetBtn").addEventListener("click", () => setClockTime(0, 0, true));
     document.getElementById("toQuizBtn").addEventListener("click", () => showScreen(screenStart));
 
     function getAngleFromArea(area, clientX, clientY) {
@@ -1120,7 +1120,8 @@
       trainerPointerMove(t.clientX, t.clientY);
     }, {passive:false});
     window.addEventListener("touchend", stopTrainerDrag);
-    setClockTime(8,0,false);
+    const initialTrainerTime = randomTimeForLevel(currentLevel);
+    setClockTime(initialTrainerTime.h, initialTrainerTime.m, false);
     updateTrainerBadge();
 
     const quizHourHand = document.getElementById("quizHourHand");
