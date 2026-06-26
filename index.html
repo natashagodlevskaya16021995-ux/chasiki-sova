@@ -848,8 +848,17 @@
       const usedLabels = new Set([formatTime(correctOption)]);
       const usedClockTimes = new Set([keyTime(correctOption)]);
 
-      function addDistractor(time, use24 = !!time.use24) {
-        const option = {h:mod24(time.h), m:time.m, use24, correct:false};
+      function cleanMinute(minute) {
+        return ((Math.round(minute) % 60) + 60) % 60;
+      }
+
+      function addDistractor(time) {
+        const option = {
+          h:mod24(time.h),
+          m:cleanMinute(time.m),
+          use24:typeof time.use24 === "boolean" ? time.use24 : !!task.use24,
+          correct:false
+        };
         const label = formatTime(option);
         const clockKey = keyTime(option);
         if (usedLabels.has(label)) return false;
@@ -860,17 +869,112 @@
         return true;
       }
 
-      makeDistractors(task, level, 12).forEach((time, index) => {
-        const use24 = index % 2 === 0 ? !!task.use24 : !task.use24;
-        addDistractor(time, use24);
-      });
+      function addFirstFromGroup(group) {
+        for (const item of group) {
+          if (addDistractor(item)) return true;
+        }
+        return false;
+      }
+
+      const h = mod24(task.h);
+      const h12 = mod12(task.h);
+      const m = task.m;
+      const use24 = !!task.use24;
+
+      const closeMinuteGroup = [];
+      const hourMistakeGroup = [];
+      const handConfusionGroup = [];
+      const extraGroup = [];
+
+      if (level === "easy") {
+        closeMinuteGroup.push(
+          {h:h + 1, m:0, use24},
+          {h:h - 1, m:0, use24},
+          {h:h + 2, m:0, use24}
+        );
+        hourMistakeGroup.push(
+          {h:h + 12, m:0, use24:true},
+          {h:h - 12, m:0, use24:true},
+          {h:h + 3, m:0, use24}
+        );
+        handConfusionGroup.push(
+          {h:h - 1, m:0, use24},
+          {h:h + 3, m:0, use24},
+          {h:h - 3, m:0, use24}
+        );
+      } else {
+        if (level === "hard") {
+          closeMinuteGroup.push(
+            {h, m:m + 1, use24},
+            {h, m:m - 1, use24},
+            {h, m:Math.round(m / 5) * 5, use24},
+            {h, m:m + 5, use24},
+            {h, m:m - 5, use24}
+          );
+        } else {
+          closeMinuteGroup.push(
+            {h, m:m + 5, use24},
+            {h, m:m - 5, use24},
+            {h, m:m + 10, use24},
+            {h, m:m - 10, use24},
+            {h, m:m + 15, use24}
+          );
+        }
+
+        hourMistakeGroup.push(
+          {h:h + 1, m, use24},
+          {h:h - 1, m, use24},
+          {h:m >= 30 ? h + 1 : h - 1, m, use24},
+          {h:h + 2, m, use24}
+        );
+
+        // Типичная ошибка: ребёнок меняет стрелки местами.
+        // Например, 3:43 превращается в 8:19:
+        // длинная стрелка стоит между 8 и 9, а короткая между 3 и 4.
+        const swappedHour = m === 0 ? 12 : Math.floor(m / 5);
+        const swappedMinute = Math.round(h12 * 5 + m / 12) % 60;
+        handConfusionGroup.push(
+          {h:swappedHour, m:swappedMinute, use24:false},
+          {h:swappedHour, m:swappedMinute, use24:true}
+        );
+
+        // Ошибка: ребёнок читает номер, около которого стоит минутная стрелка, как минуты.
+        const minuteNumber = Math.round(m / 5) % 12;
+        handConfusionGroup.push(
+          {h, m:minuteNumber === 0 ? 12 : minuteNumber, use24},
+          {h:h + 1, m:minuteNumber === 0 ? 12 : minuteNumber, use24}
+        );
+
+        // Ошибка: ребёнок принимает часовую стрелку за точное число минут.
+        handConfusionGroup.push(
+          {h:h12 === 0 ? 12 : h12, m:m, use24:false},
+          {h:h12 + 12, m:m, use24:true}
+        );
+      }
+
+      extraGroup.push(
+        {h:h + 1, m:cleanMinute(m + (level === "hard" ? 1 : 5)), use24},
+        {h:h - 1, m:cleanMinute(m - (level === "hard" ? 1 : 5)), use24},
+        {h:h + 1, m:cleanMinute(m + 15), use24},
+        {h:h - 2, m:cleanMinute(m + 10), use24},
+        ...makeDistractors(task, level, 8).map((time, index) => ({
+          h:time.h,
+          m:time.m,
+          use24:index % 2 === 0 ? !!task.use24 : !task.use24
+        }))
+      );
+
+      addFirstFromGroup(closeMinuteGroup);
+      addFirstFromGroup(hourMistakeGroup);
+      addFirstFromGroup(handConfusionGroup);
+      addFirstFromGroup(extraGroup);
 
       while (distractors.length < count - 1) {
         const t = randomTimeForLevel(level, Math.random() < 0.5);
-        addDistractor(t, !!t.use24);
+        addDistractor(t);
       }
 
-      return shuffle([correctOption, ...shuffle(distractors).slice(0, count - 1)]);
+      return shuffle([correctOption, ...distractors.slice(0, count - 1)]);
     }
 
     function clockSvgMarkup(time) {
